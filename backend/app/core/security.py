@@ -2,39 +2,21 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import bcrypt
 from app.core.config import settings
 
-# Password hashing with fallback
-try:
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    # Test if bcrypt works
-    pwd_context.hash("test")
-except Exception:
-    pwd_context = None
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    if pwd_context:
+    try:
         return pwd_context.verify(plain_password, hashed_password)
-    else:
-        # Fallback to direct bcrypt
-        try:
-            return bcrypt.checkpw(
-                plain_password.encode('utf-8'), 
-                hashed_password.encode('utf-8')
-            )
-        except Exception:
-            return False
+    except Exception:
+        return False
 
 def get_hashed_password(password: str) -> str:
     """Hash a password"""
-    if pwd_context:
-        return pwd_context.hash(password)
-    else:
-        # Fallback to direct bcrypt
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
@@ -44,13 +26,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    
+    # Ensure SECRET_KEY is a string
+    secret_key = str(settings.SECRET_KEY)
+    algorithm = str(settings.ALGORITHM)
+    
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
     return encoded_jwt
 
-def decode_access_token(token: str) -> Optional[dict]:
-    """Decode and verify a JWT access token"""
+def decode_access_token(token: str) -> Optional[str]:
+    """Decode and verify a JWT access token - returns username if valid"""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
+        secret_key = str(settings.SECRET_KEY)
+        algorithm = str(settings.ALGORITHM)
+        
+        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+        username = payload.get("sub")
+        
+        # Explicitly check if username exists and is a string
+        if username is None or not isinstance(username, str):
+            return None
+            
+        return username
     except JWTError:
         return None

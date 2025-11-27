@@ -26,13 +26,12 @@ def create_api_token(
     # Generate unique token
     token = generate_token()
     
-    # Create token record
+    # Create token record using constructor
     api_token = APIToken(
         token=token,
         name=token_data.name,
         is_active=True
     )
-    
     db.add(api_token)
     db.commit()
     db.refresh(api_token)
@@ -92,8 +91,11 @@ def toggle_api_token(
             detail="Token not found"
         )
     
-    token.is_active = not token.is_active
+    # Get current value and toggle it
+    current_status = bool(token.is_active)
+    token.is_active = not current_status
+    
     db.commit()
     db.refresh(token)
     
-    return {"message": "Token status updated", "is_active": token.is_active}
+    return {"message": "Token status updated", "is_active": bool(token.is_active)}

@@ -1,248 +1,486 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { tokensAPI } from "@/lib/api";
-import TokenList from "@/components/TokenList";
-import type { APIToken } from "@/types";
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  Copy,
+  Trash2,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface Token {
+  id: number;
+  token: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+  usage_count: number;
+}
 
 export default function SettingsPage() {
-  const [tokens, setTokens] = useState<APIToken[]>([]);
+  const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTokenName, setNewTokenName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createdToken, setCreatedToken] = useState<APIToken | null>(null);
+  const [creatingToken, setCreatingToken] = useState(false);
+  const [visibleTokens, setVisibleTokens] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
 
+  // Get JWT token from localStorage
+  const getAuthToken = () => {
+    return localStorage.getItem("token");
+  };
+
+  // Fetch all tokens
   const fetchTokens = async () => {
-    setLoading(true);
     try {
-      const data = await tokensAPI.list();
-      setTokens(data);
+      const authToken = getAuthToken();
+      if (!authToken) {
+        toast({
+          title: "Error",
+          description: "Please login first",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch("http://localhost:8000/api/tokens", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTokens(data);
+      } else {
+        throw new Error("Failed to fetch tokens");
+      }
     } catch (error) {
-      console.error("Failed to fetch tokens:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load tokens",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  // Create new token
+  const createToken = async () => {
+    if (!newTokenName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a token name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCreatingToken(true);
+    try {
+      const authToken = getAuthToken();
+      const response = await fetch(
+        "http://localhost:8000/api/tokens/generate",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: newTokenName }),
+        }
+      );
+
+      if (response.ok) {
+        const newToken = await response.json();
+        setTokens([newToken, ...tokens]);
+        setNewTokenName("");
+
+        // Copy token to clipboard
+        await navigator.clipboard.writeText(newToken.token);
+
+        toast({
+          title: "Success!",
+          description: "Token created and copied to clipboard",
+        });
+
+        // Show the new token by default
+        setVisibleTokens(new Set([newToken.id]));
+      } else {
+        throw new Error("Failed to create token");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create token",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingToken(false);
+    }
+  };
+
+  // Delete token
+  const deleteToken = async (tokenId: number) => {
+    if (!confirm("Are you sure you want to delete this token?")) {
+      return;
+    }
+
+    try {
+      const authToken = getAuthToken();
+      const response = await fetch(
+        `http://localhost:8000/api/tokens/${tokenId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        setTokens(tokens.filter((t) => t.id !== tokenId));
+        toast({
+          title: "Success",
+          description: "Token deleted successfully",
+        });
+      } else {
+        throw new Error("Failed to delete token");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete token",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Toggle token active status
+  const toggleToken = async (tokenId: number) => {
+    try {
+      const authToken = getAuthToken();
+      const response = await fetch(
+        `http://localhost:8000/api/tokens/${tokenId}/toggle`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        setTokens(
+          tokens.map((t) =>
+            t.id === tokenId ? { ...t, is_active: !t.is_active } : t
+          )
+        );
+        toast({
+          title: "Success",
+          description: "Token status updated",
+        });
+      } else {
+        throw new Error("Failed to toggle token");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update token status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Copy token to clipboard
+  const copyToken = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      toast({
+        title: "Copied!",
+        description: "Token copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy token",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Toggle token visibility
+  const toggleTokenVisibility = (tokenId: number) => {
+    const newVisible = new Set(visibleTokens);
+    if (newVisible.has(tokenId)) {
+      newVisible.delete(tokenId);
+    } else {
+      newVisible.add(tokenId);
+    }
+    setVisibleTokens(newVisible);
+  };
+
+  // Mask token for display
+  const maskToken = (token: string) => {
+    return (
+      token.substring(0, 12) +
+      "•".repeat(20) +
+      token.substring(token.length - 8)
+    );
   };
 
   useEffect(() => {
     fetchTokens();
   }, []);
 
-  const handleCreateToken = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTokenName.trim()) {
-      alert("Please enter a token name");
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const token = await tokensAPI.generate(newTokenName);
-      setCreatedToken(token);
-      setNewTokenName("");
-      fetchTokens();
-    } catch (error) {
-      alert("Failed to create token");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const closeModal = () => {
-    setShowCreateModal(false);
-    setCreatedToken(null);
-    setNewTokenName("");
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {/* Page Header */}
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="mt-2 text-gray-600">
-          Manage API tokens for merchant access
+        <p className="text-gray-600 mt-2">
+          Manage API tokens and application settings
         </p>
       </div>
 
-      {/* Create Token Button */}
-      <div className="mb-6">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium flex items-center space-x-2"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          <span>Generate New Token</span>
-        </button>
-      </div>
-
-      {/* Tokens List */}
-      {loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="bg-white border border-gray-200 rounded-lg p-6 animate-pulse"
-            >
-              <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+      {/* Create New Token */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Create New API Token
+          </CardTitle>
+          <CardDescription>
+            Generate a new token for merchant access to the upload API
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label htmlFor="tokenName">Token Name</Label>
+              <Input
+                id="tokenName"
+                placeholder="e.g., Merchant Store 1, Production API"
+                value={newTokenName}
+                onChange={(e) => setNewTokenName(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && createToken()}
+                className="mt-2"
+              />
             </div>
-          ))}
-        </div>
-      ) : (
-        <TokenList tokens={tokens} onRefresh={fetchTokens} />
-      )}
-
-      {/* Create Token Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              Generate New API Token
-            </h3>
-
-            <form onSubmit={handleCreateToken}>
-              <div className="mb-6">
-                <label
-                  htmlFor="tokenName"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Token Name
-                </label>
-                <input
-                  id="tokenName"
-                  type="text"
-                  value={newTokenName}
-                  onChange={(e) => setNewTokenName(e.target.value)}
-                  placeholder="e.g., Merchant ABC"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  required
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  This name will help you identify which merchant is using this
-                  token
-                </p>
-              </div>
-
-              <div className="flex space-x-3">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium disabled:opacity-50"
-                >
-                  {creating ? "Generating..." : "Generate Token"}
-                </button>
-              </div>
-            </form>
+            <div className="flex items-end">
+              <Button
+                onClick={createToken}
+                disabled={creatingToken || !newTokenName.trim()}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {creatingToken ? "Creating..." : "Generate Token"}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
-      {/* Token Created Modal */}
-      {createdToken && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
-            <div className="text-center mb-6">
-              <div className="mx-auto h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <svg
-                  className="h-6 w-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+      {/* Existing Tokens */}
+      <Card>
+        <CardHeader>
+          <CardTitle>API Tokens ({tokens.length})</CardTitle>
+          <CardDescription>
+            Manage existing API tokens for merchant access
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tokens.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <Plus className="h-16 w-16 mx-auto" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900">
-                Token Generated Successfully!
-              </h3>
-              <p className="mt-2 text-sm text-gray-600">
-                Copy this token now. You won't be able to see it again.
+              <p className="text-gray-600 mb-2">No API tokens yet</p>
+              <p className="text-sm text-gray-500">
+                Create your first token to get started
               </p>
             </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Token Name: {createdToken.name}
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={createdToken.token}
-                  readOnly
-                  className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono text-sm"
-                />
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(createdToken.token);
-                    alert("Token copied to clipboard!");
-                  }}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+          ) : (
+            <div className="space-y-4">
+              {tokens.map((token) => (
+                <div
+                  key={token.id}
+                  className="border rounded-lg p-4 hover:border-gray-400 transition-colors"
                 >
-                  Copy
-                </button>
-              </div>
-            </div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-lg">{token.name}</h3>
+                        <Badge
+                          variant={token.is_active ? "default" : "secondary"}
+                          className={
+                            token.is_active
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }
+                        >
+                          {token.is_active ? (
+                            <>
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-3 w-3 mr-1" /> Inactive
+                            </>
+                          )}
+                        </Badge>
+                      </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start space-x-3">
-                <svg
-                  className="h-5 w-5 text-yellow-600 mt-0.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-                <div className="text-sm text-yellow-800">
-                  <p className="font-medium mb-1">Important:</p>
-                  <p>
-                    Save this token securely. It won't be shown again. Merchants
-                    will need this token to upload data via the API.
-                  </p>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono bg-gray-100 px-3 py-1.5 rounded text-sm flex-1">
+                            {visibleTokens.has(token.id)
+                              ? token.token
+                              : maskToken(token.token)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => toggleTokenVisibility(token.id)}
+                          >
+                            {visibleTokens.has(token.id) ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyToken(token.token)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 mt-3">
+                          <div>
+                            <p className="text-xs text-gray-500">Created</p>
+                            <p className="font-medium">
+                              {new Date(token.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Last Used</p>
+                            <p className="font-medium">
+                              {token.last_used_at
+                                ? new Date(
+                                    token.last_used_at
+                                  ).toLocaleDateString()
+                                : "Never"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Usage Count</p>
+                            <p className="font-medium">{token.usage_count}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggleToken(token.id)}
+                        className={
+                          token.is_active
+                            ? "text-orange-600 hover:text-orange-700"
+                            : "text-green-600 hover:text-green-700"
+                        }
+                      >
+                        {token.is_active ? "Disable" : "Enable"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => deleteToken(token.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
 
-            <button
-              onClick={closeModal}
-              className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition font-medium"
-            >
-              Close
-            </button>
+      {/* Usage Instructions */}
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle>How to Use API Tokens</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h4 className="font-semibold mb-2">1. Generate a Token</h4>
+            <p className="text-sm text-gray-600">
+              Create a new token above by entering a descriptive name and
+              clicking "Generate Token". The token will be automatically copied
+              to your clipboard.
+            </p>
           </div>
-        </div>
-      )}
+
+          <div>
+            <h4 className="font-semibold mb-2">2. Share with Merchant</h4>
+            <p className="text-sm text-gray-600">
+              Securely share the generated token with the merchant who needs to
+              upload data.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">3. API Endpoint</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Merchants should use this endpoint to upload data:
+            </p>
+            <code className="block bg-gray-100 p-3 rounded text-sm font-mono">
+              POST http://localhost:8000/api/upload?token=YOUR_TOKEN_HERE
+            </code>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">4. Manage Tokens</h4>
+            <p className="text-sm text-gray-600">
+              You can disable tokens temporarily or delete them permanently.
+              Track usage statistics to monitor merchant activity.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

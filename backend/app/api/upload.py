@@ -46,15 +46,18 @@ def upload_data(
         )
     
     # Create upload session
-    upload_session = UploadSession(
-        token_id=api_token.id,
-        total_records=validation_result['total_records'],
-        valid_records=validation_result['valid_count'],
-        duplicate_records=validation_result['duplicate_count']
-    )
+    upload_session = UploadSession()
+    upload_session.token_id = int(api_token.id)  # Explicit cast
+    upload_session.total_records = validation_result['total_records']
+    upload_session.valid_records = validation_result['valid_count']
+    upload_session.duplicate_records = validation_result['duplicate_count']
+    
     db.add(upload_session)
     db.commit()
     db.refresh(upload_session)
+    
+    # Get the actual ID value as int
+    session_id = int(upload_session.id)
     
     # Group records by lot_number
     lots_data = validator.group_by_lot(valid_records)
@@ -66,20 +69,21 @@ def upload_data(
         file_info = csv_generator.save_to_csv(lot_number, lot_records)
         
         # Save lot metadata
-        lot = Lot(
-            lot_number=lot_number,
-            record_count=len(lot_records),
-            file_path=file_info['file_path'],
-            file_name=file_info['file_name'],
-            upload_session_id=upload_session.id
-        )
+        lot = Lot()
+        lot.lot_number = lot_number
+        lot.record_count = len(lot_records)
+        lot.file_path = file_info['file_path']
+        lot.file_name = file_info['file_name']
+        lot.upload_session_id = session_id  # Use the int value
+        
         db.add(lot)
         lots_created.append(lot_number)
     
     db.commit()
     
     # Save QR identifiers for future duplicate checking
-    validator.save_identifiers(valid_records, upload_session.id)
+    # Use the int value, not the Column
+    validator.save_identifiers(valid_records, session_id)
     
     # Prepare response
     response = UploadResponse(

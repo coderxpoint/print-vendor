@@ -82,7 +82,7 @@ def create_admin_user():
                 update_password = input("Update admin password? (y/N): ").lower().strip()
                 if update_password == 'y':
                     new_password = input("Enter new password: ")
-                    existing_admin.hashed_password = get_hashed_password(new_password)
+                    existing_admin.new_password = get_hashed_password(new_password)
                     db.commit()
                     print("✓ Admin password updated")
             else:
