@@ -76,15 +76,16 @@ def download_lot(
             detail="Lot not found"
         )
     
-    if not os.path.exists(lot.file_path):
+    file_path = str(lot.file_path)
+    if not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found on server"
         )
     
     return FileResponse(
-        path=lot.file_path,
-        filename=lot.file_name,
+        path=str(lot.file_path),
+        filename=str(lot.file_name),
         media_type='text/csv'
     )
 
@@ -113,7 +114,7 @@ def download_multiple_lots(
             "lot_id": lot.id,
             "lot_number": lot.lot_number,
             "file_name": lot.file_name,
-            "available": os.path.exists(lot.file_path)
+            "available": os.path.exists(str(lot.file_path))
         })
     
     return DownloadMultipleResponse(
@@ -162,9 +163,9 @@ def delete_lot(
         )
     
     # Delete file if exists
-    if os.path.exists(lot.file_path):
+    if os.path.exists(str(lot.file_path)):
         try:
-            os.remove(lot.file_path)
+            os.remove(str(lot.file_path))
         except Exception as e:
             # Log error but continue with database deletion
             print(f"Error deleting file: {e}")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
+from typing import cast
 from app.models.database import get_db
 from app.models.models import AdminUser
 from app.models.schemas import AdminLogin, Token
@@ -17,7 +18,7 @@ def login(credentials: AdminLogin, db: Session = Depends(get_db)):
     """
     user = db.query(AdminUser).filter(AdminUser.username == credentials.username).first()
     
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    if not user or not verify_password(credentials.password, cast(str, user.hashed_password)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"

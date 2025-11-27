@@ -53,9 +53,12 @@ def validate_api_token(
             detail="Invalid or inactive API token"
         )
     
-    # Update token usage
-    api_token.usage_count += 1
-    api_token.last_used_at = datetime.utcnow()
+    # Update token usage at the DB level to avoid assigning to a ColumnElement
+    db.query(APIToken).filter(APIToken.token == token).update({
+        APIToken.usage_count: APIToken.usage_count + 1,
+        APIToken.last_used_at: datetime.utcnow()
+    }, synchronize_session=False)
     db.commit()
+    db.refresh(api_token)
     
     return api_token
