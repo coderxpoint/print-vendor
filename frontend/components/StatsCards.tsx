@@ -2,6 +2,14 @@
 
 import { formatNumber } from "@/lib/utils";
 import type { Stats } from "@/types";
+import {
+  FileText,
+  Database,
+  Upload,
+  Key,
+  TrendingUp,
+  Activity,
+} from "lucide-react";
 
 interface StatsCardsProps {
   stats: Stats | null;
@@ -13,95 +21,55 @@ export default function StatsCards({ stats, loading }: StatsCardsProps) {
     {
       title: "Total Lots",
       value: stats?.total_lots || 0,
-      icon: (
-        <svg
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-      ),
+      icon: FileText,
       color: "bg-blue-500",
+      lightColor: "bg-blue-50",
+      textColor: "text-blue-600",
+      description: "Uploaded lots",
     },
     {
       title: "Total Records",
       value: stats?.total_records || 0,
-      icon: (
-        <svg
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-          />
-        </svg>
-      ),
+      icon: Database,
       color: "bg-green-500",
+      lightColor: "bg-green-50",
+      textColor: "text-green-600",
+      description: "Data records",
     },
     {
       title: "Total Uploads",
       value: stats?.total_uploads || 0,
-      icon: (
-        <svg
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-          />
-        </svg>
-      ),
+      icon: Upload,
       color: "bg-purple-500",
+      lightColor: "bg-purple-50",
+      textColor: "text-purple-600",
+      description: "File uploads",
     },
     {
       title: "Active Tokens",
       value: stats?.active_tokens || 0,
-      icon: (
-        <svg
-          className="h-6 w-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-          />
-        </svg>
-      ),
+      icon: Key,
       color: "bg-orange-500",
+      lightColor: "bg-orange-50",
+      textColor: "text-orange-600",
+      description: "API tokens",
     },
   ];
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="bg-white rounded-xl shadow-sm p-6 animate-pulse"
+            className="bg-white rounded-xl shadow-sm border p-6 animate-pulse"
           >
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-            <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="h-4 bg-gray-200 rounded w-24"></div>
+              <div className="h-12 w-12 bg-gray-200 rounded-lg"></div>
+            </div>
+            <div className="h-8 bg-gray-200 rounded w-20 mb-2"></div>
+            <div className="h-3 bg-gray-100 rounded w-32"></div>
           </div>
         ))}
       </div>
@@ -109,25 +77,46 @@ export default function StatsCards({ stats, loading }: StatsCardsProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      {cards.map((card, index) => (
-        <div
-          key={index}
-          className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">{card.title}</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {formatNumber(card.value)}
-              </p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      {cards.map((card, index) => {
+        const Icon = card.icon;
+
+        return (
+          <div
+            key={index}
+            className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 p-4 sm:p-6 group cursor-pointer"
+          >
+            <div className="flex items-start justify-between mb-3 sm:mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">
+                  {card.title}
+                </p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors truncate">
+                  {formatNumber(card.value)}
+                </p>
+              </div>
+              <div
+                className={`${card.lightColor} p-2.5 sm:p-3 rounded-lg group-hover:scale-110 transition-transform shrink-0`}
+              >
+                <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${card.textColor}`} />
+              </div>
             </div>
-            <div className={`${card.color} p-3 rounded-lg`}>
-              <div className="text-white">{card.icon}</div>
+
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Activity className="h-3 w-3" />
+              <span className="truncate">{card.description}</span>
+            </div>
+
+            {/* Progress indicator - optional visual enhancement */}
+            <div className="mt-3 h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${card.color} rounded-full transition-all duration-1000`}
+                style={{ width: `${Math.min(100, (card.value / 100) * 10)}%` }}
+              ></div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
