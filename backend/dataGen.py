@@ -17,7 +17,7 @@ def generate_qr_data(start_id, num_records):
 
 # Generate 700 records
 start_id = 522322
-num_records = 70000
+num_records = 300000
 qr_data = generate_qr_data(start_id, num_records)
 
 # Save to JSON
