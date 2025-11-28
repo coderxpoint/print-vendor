@@ -32,69 +32,77 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [lots, setLots] = useState<Lot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalRecords, setTotalRecords] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
 
   // Filter states
-  const [searchLotNumber, setSearchLotNumber] = useState("");
-  const [searchFileName, setSearchFileName] = useState("");
-  const [uploadedByFilter, setUploadedByFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [sortBy, setSortBy] = useState("uploaded_at");
+  const [searchLotNumber, setSearchLotNumber] = useState<string>("");
+  const [searchFileName, setSearchFileName] = useState<string>("");
+  const [uploadedByFilter, setUploadedByFilter] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("uploaded_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [recordsPerPage, setRecordsPerPage] = useState(50);
+  const [recordsPerPage, setRecordsPerPage] = useState<number>(50);
 
   // UI states
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(false);
 
   // Bulk operations
   const [selectedLots, setSelectedLots] = useState<number[]>([]);
-  const [bulkDownloading, setBulkDownloading] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState<boolean>(false);
+  const [bulkDeleting, setBulkDeleting] = useState<boolean>(false);
 
   const { toast } = useToast();
 
-  const fetchData = async () => {
+  const fetchData = async (): Promise<void> => {
     setLoading(true);
+    setError(null);
+
     try {
+      console.log("🔍 Fetching dashboard data...");
+
       // Fetch stats
-      const statsData = await lotsAPI.getStats();
+      const statsData: Stats = await lotsAPI.getStats();
+      console.log("📊 Stats data:", statsData);
       setStats(statsData);
 
-      // Build query parameters
-      const params: any = {
-        page: currentPage,
-        limit: recordsPerPage,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-      };
+      // Fetch lots
+      const lotsData = await lotsAPI.list(
+        currentPage,
+        recordsPerPage,
+        searchLotNumber || undefined
+      );
 
-      if (searchLotNumber) params.lot_number = searchLotNumber;
-      if (searchFileName) params.file_name = searchFileName;
-      if (uploadedByFilter) params.uploaded_by = uploadedByFilter;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
+      console.log("📦 Lots data received:", lotsData);
+      console.log("📦 Number of lots:", lotsData.lots?.length || 0);
 
-      // Fetch lots with filters
-      const lotsData = await lotsAPI.list(currentPage, recordsPerPage, params);
-      setLots(lotsData.lots);
+      setLots(lotsData.lots || []);
       setTotalPages(Math.ceil(lotsData.total / recordsPerPage));
       setTotalRecords(lotsData.total);
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
+    } catch (error: any) {
+      console.error("❌ Failed to fetch data:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to load dashboard data";
+      setError(errorMessage);
+
       toast({
         title: "Error",
-        description: "Failed to load dashboard data",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -104,15 +112,33 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, [currentPage, recordsPerPage, sortBy, sortOrder]);
+  }, [currentPage, recordsPerPage]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (currentPage === 1) {
+      fetchData();
+    } else {
+      setCurrentPage(1);
+    }
+  }, [sortBy, sortOrder]);
+
+  // Fixed: Proper form submit handler
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
+    console.log("🔍 Search triggered");
     setCurrentPage(1);
     fetchData();
   };
 
-  const handleClearFilters = () => {
+  // Fixed: Separate function for button clicks
+  const handleApplyFilters = (): void => {
+    console.log("🔍 Applying filters");
+    setCurrentPage(1);
+    fetchData();
+  };
+
+  const handleClearFilters = (): void => {
+    console.log("🧹 Clearing all filters");
     setSearchLotNumber("");
     setSearchFileName("");
     setUploadedByFilter("");
@@ -121,9 +147,10 @@ export default function DashboardPage() {
     setSortBy("uploaded_at");
     setSortOrder("desc");
     setCurrentPage(1);
+    setTimeout(() => fetchData(), 100);
   };
 
-  const handleBulkDownload = async () => {
+  const handleBulkDownload = async (): Promise<void> => {
     if (selectedLots.length === 0) {
       toast({
         title: "No Selection",
@@ -157,7 +184,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = async (): Promise<void> => {
     if (selectedLots.length === 0) {
       toast({
         title: "No Selection",
@@ -199,7 +226,7 @@ export default function DashboardPage() {
     }
   };
 
-  const activeFilterCount = [
+  const activeFilterCount: number = [
     searchLotNumber,
     searchFileName,
     uploadedByFilter,
@@ -207,12 +234,12 @@ export default function DashboardPage() {
     dateTo,
   ].filter(Boolean).length;
 
-  const hasActiveFilters =
-    searchLotNumber ||
-    searchFileName ||
-    uploadedByFilter ||
-    dateFrom ||
-    dateTo ||
+  const hasActiveFilters: boolean =
+    searchLotNumber !== "" ||
+    searchFileName !== "" ||
+    uploadedByFilter !== "" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
     sortBy !== "uploaded_at" ||
     sortOrder !== "desc";
 
@@ -241,10 +268,28 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchData}
+              className="ml-4"
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Statistics */}
       <StatsCards stats={stats} loading={loading} />
 
-      {/* Quick Search Bar (Always Visible) */}
+      {/* Quick Search Bar */}
       <Card>
         <CardContent className="p-4">
           <form onSubmit={handleSearch} className="space-y-4">
@@ -481,11 +526,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons - Fixed event handlers */}
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Button
                 type="button"
-                onClick={handleSearch}
+                onClick={handleApplyFilters}
                 className="gap-2 bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none"
               >
                 <Search className="h-4 w-4" />
