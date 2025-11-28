@@ -20,8 +20,11 @@ import {
   EyeOff,
   CheckCircle2,
   XCircle,
+  AlertCircle,
+  Shield,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Token {
   id: number;
@@ -37,9 +40,13 @@ export default function SettingsPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTokenName, setNewTokenName] = useState("");
+  const [validationString, setValidationString] = useState("");
   const [creatingToken, setCreatingToken] = useState(false);
   const [visibleTokens, setVisibleTokens] = useState<Set<number>>(new Set());
+  const [validationError, setValidationError] = useState(false);
   const { toast } = useToast();
+
+  const REQUIRED_VALIDATION_STRING = "lotdata";
 
   // Get JWT token from localStorage
   const getAuthToken = () => {
@@ -82,12 +89,26 @@ export default function SettingsPage() {
     }
   };
 
+  // Check if validation string is correct
+  const isValidationCorrect = validationString === REQUIRED_VALIDATION_STRING;
+  const canGenerateToken = newTokenName.trim() && isValidationCorrect;
+
   // Create new token
   const createToken = async () => {
     if (!newTokenName.trim()) {
       toast({
         title: "Error",
         description: "Please enter a token name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isValidationCorrect) {
+      setValidationError(true);
+      toast({
+        title: "Validation Failed",
+        description: `Please enter the correct validation string: "${REQUIRED_VALIDATION_STRING}"`,
         variant: "destructive",
       });
       return;
@@ -112,6 +133,8 @@ export default function SettingsPage() {
         const newToken = await response.json();
         setTokens([newToken, ...tokens]);
         setNewTokenName("");
+        setValidationString("");
+        setValidationError(false);
 
         // Copy token to clipboard
         await navigator.clipboard.writeText(newToken.token);
@@ -271,8 +294,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Create New Token */}
-      <Card className="mb-8">
-        <CardHeader>
+      <Card className="mb-8 border-blue-200">
+        <CardHeader className="bg-blue-50">
           <CardTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
             Create New API Token
@@ -281,28 +304,124 @@ export default function SettingsPage() {
             Generate a new token for merchant access to the upload API
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label htmlFor="tokenName">Token Name</Label>
+        <CardContent className="pt-6">
+          {/* Security Alert */}
+          <Alert className="mb-6 border-amber-200 bg-amber-50">
+            <Shield className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">
+              <strong>Security Check Required:</strong> To generate a new API
+              token, you must enter the validation string{" "}
+              <code className="px-2 py-0.5 bg-amber-100 rounded font-mono text-sm">
+                {REQUIRED_VALIDATION_STRING}
+              </code>{" "}
+              below.
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-4">
+            {/* Token Name Input */}
+            <div>
+              <Label htmlFor="tokenName">
+                Token Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="tokenName"
                 placeholder="e.g., Merchant Store 1, Production API"
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && createToken()}
                 className="mt-2"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Choose a descriptive name to identify this token
+              </p>
             </div>
-            <div className="flex items-end">
+
+            {/* Validation String Input */}
+            <div>
+              <Label htmlFor="validationString">
+                Validation String <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="validationString"
+                placeholder={`Enter Secret Code to enable token generation`}
+                value={validationString}
+                onChange={(e) => {
+                  setValidationString(e.target.value);
+                  setValidationError(false);
+                }}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && canGenerateToken && createToken()
+                }
+                className={`mt-2 font-mono ${
+                  validationError
+                    ? "border-red-500 focus:ring-red-500"
+                    : isValidationCorrect
+                    ? "border-green-500 focus:ring-green-500"
+                    : ""
+                }`}
+              />
+              <div className="flex items-center gap-2 mt-2">
+                {validationString && (
+                  <>
+                    {isValidationCorrect ? (
+                      <div className="flex items-center gap-1 text-green-600 text-sm">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Validation successful</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-red-600 text-sm">
+                        <XCircle className="h-4 w-4" />
+                        <span>Incorrect validation string.</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Generate Button */}
+            <div className="flex justify-end pt-2">
               <Button
                 onClick={createToken}
-                disabled={creatingToken || !newTokenName.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
+                disabled={!canGenerateToken || creatingToken}
+                className={`gap-2 ${
+                  canGenerateToken
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "bg-gray-300 cursor-not-allowed"
+                }`}
               >
-                {creatingToken ? "Creating..." : "Generate Token"}
+                {creatingToken ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Generate Token
+                  </>
+                )}
               </Button>
             </div>
+
+            {!canGenerateToken && (
+              <Alert className="border-gray-200">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {!newTokenName.trim() && !validationString && (
+                    <>
+                      Please fill in both required fields to generate a token.
+                    </>
+                  )}
+                  {!newTokenName.trim() && validationString && (
+                    <>Please enter a token name.</>
+                  )}
+                  {newTokenName.trim() && !isValidationCorrect && (
+                    <>Please enter the correct validation string to proceed.</>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -448,9 +567,10 @@ export default function SettingsPage() {
           <div>
             <h4 className="font-semibold mb-2">1. Generate a Token</h4>
             <p className="text-sm text-gray-600">
-              Create a new token above by entering a descriptive name and
-              clicking "Generate Token". The token will be automatically copied
-              to your clipboard.
+              Create a new token above by entering a descriptive name and the
+              validation string "{REQUIRED_VALIDATION_STRING}". Click "Generate
+              Token" and the token will be automatically copied to your
+              clipboard.
             </p>
           </div>
 

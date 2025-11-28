@@ -4,6 +4,28 @@ import { useState } from "react";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { lotsAPI } from "@/lib/api";
 import type { Lot } from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Download,
+  Trash2,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
+  Calendar,
+  User,
+  FileText,
+  Hash,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 interface LotsTableProps {
   lots: Lot[];
@@ -12,6 +34,8 @@ interface LotsTableProps {
   totalPages: number;
   currentPage: number;
   onPageChange: (page: number) => void;
+  selectedLots: number[];
+  onSelectionChange: (selected: number[]) => void;
 }
 
 export default function LotsTable({
@@ -21,23 +45,25 @@ export default function LotsTable({
   totalPages,
   currentPage,
   onPageChange,
+  selectedLots,
+  onSelectionChange,
 }: LotsTableProps) {
-  const [selectedLots, setSelectedLots] = useState<number[]>([]);
   const [downloading, setDownloading] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const handleSelectAll = () => {
     if (selectedLots.length === lots.length) {
-      setSelectedLots([]);
+      onSelectionChange([]);
     } else {
-      setSelectedLots(lots.map((lot) => lot.id));
+      onSelectionChange(lots.map((lot) => lot.id));
     }
   };
 
   const handleSelectLot = (id: number) => {
     if (selectedLots.includes(id)) {
-      setSelectedLots(selectedLots.filter((lotId) => lotId !== id));
+      onSelectionChange(selectedLots.filter((lotId) => lotId !== id));
     } else {
-      setSelectedLots([...selectedLots, id]);
+      onSelectionChange([...selectedLots, id]);
     }
   };
 
@@ -45,28 +71,18 @@ export default function LotsTable({
     setDownloading(id);
     try {
       await lotsAPI.download(id);
+      toast({
+        title: "Success",
+        description: "File downloaded successfully",
+      });
     } catch (error) {
-      alert("Failed to download file");
+      toast({
+        title: "Error",
+        description: "Failed to download file",
+        variant: "destructive",
+      });
     } finally {
       setDownloading(null);
-    }
-  };
-
-  const handleDownloadSelected = async () => {
-    if (selectedLots.length === 0) {
-      alert("Please select at least one lot");
-      return;
-    }
-
-    try {
-      for (const id of selectedLots) {
-        await lotsAPI.download(id);
-        // Small delay between downloads
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-      setSelectedLots([]);
-    } catch (error) {
-      alert("Failed to download some files");
     }
   };
 
@@ -77,16 +93,24 @@ export default function LotsTable({
 
     try {
       await lotsAPI.delete(id);
+      toast({
+        title: "Success",
+        description: "Lot deleted successfully",
+      });
       onRefresh();
     } catch (error) {
-      alert("Failed to delete lot");
+      toast({
+        title: "Error",
+        description: "Failed to delete lot",
+        variant: "destructive",
+      });
     }
   };
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-6 animate-pulse">
+      <div className="bg-white rounded-xl shadow-sm border">
+        <div className="p-4 sm:p-6 animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-16 bg-gray-100 rounded mb-3"></div>
@@ -97,56 +121,42 @@ export default function LotsTable({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm">
+    <div className="bg-white rounded-xl shadow-sm border">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Uploaded Lots</h2>
-          <div className="flex items-center space-x-3">
-            {selectedLots.length > 0 && (
-              <button
-                onClick={handleDownloadSelected}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition text-sm font-medium"
-              >
-                Download Selected ({selectedLots.length})
-              </button>
-            )}
-            <button
-              onClick={onRefresh}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-              title="Refresh"
-            >
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </button>
+      <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+              Uploaded Lots
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
+              Showing {lots.length} lot(s)
+              {selectedLots.length > 0 && ` · ${selectedLots.length} selected`}
+            </p>
           </div>
+          <Button
+            onClick={onRefresh}
+            variant="outline"
+            size="sm"
+            className="gap-2 w-full sm:w-auto"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Desktop Table View */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left">
-                <input
-                  type="checkbox"
+              <th className="px-6 py-3 text-left w-12">
+                <Checkbox
                   checked={
                     selectedLots.length === lots.length && lots.length > 0
                   }
-                  onChange={handleSelectAll}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  onCheckedChange={handleSelectAll}
                 />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -173,118 +183,77 @@ export default function LotsTable({
                   colSpan={6}
                   className="px-6 py-12 text-center text-gray-500"
                 >
-                  <svg
-                    className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  <p className="text-lg font-medium">No lots uploaded yet</p>
+                  <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <p className="text-lg font-medium">No lots found</p>
                   <p className="text-sm mt-1">
-                    Lots will appear here once merchants upload data
+                    Try adjusting your filters or upload new data
                   </p>
                 </td>
               </tr>
             ) : (
               lots.map((lot) => (
-                <tr key={lot.id} className="hover:bg-gray-50 transition">
+                <tr
+                  key={lot.id}
+                  className={`hover:bg-gray-50 transition ${
+                    selectedLots.includes(lot.id) ? "bg-blue-50" : ""
+                  }`}
+                >
                   <td className="px-6 py-4">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedLots.includes(lot.id)}
-                      onChange={() => handleSelectLot(lot.id)}
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      onCheckedChange={() => handleSelectLot(lot.id)}
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {lot.lot_number}
                     </div>
-                    <div className="text-xs text-gray-500">{lot.file_name}</div>
+                    <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">
+                      {lot.file_name}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">
+                    <Badge
+                      variant="secondary"
+                      className="bg-blue-100 text-blue-800"
+                    >
                       {formatNumber(lot.record_count)}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(lot.uploaded_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs font-medium bg-primary-100 text-primary-700 rounded">
+                    <Badge
+                      variant="secondary"
+                      className="bg-purple-100 text-purple-700"
+                    >
                       {lot.uploaded_by_token || "Unknown"}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center space-x-2">
-                      <button
+                    <div className="flex items-center gap-2">
+                      <Button
                         onClick={() => handleDownload(lot.id)}
                         disabled={downloading === lot.id}
-                        className="text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50"
-                        title="Download CSV"
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                       >
                         {downloading === lot.id ? (
-                          <svg
-                            className="animate-spin h-5 w-5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
                         ) : (
-                          <svg
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                            />
-                          </svg>
+                          <Download className="h-4 w-4" />
                         )}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => handleDelete(lot.id)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Delete"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -294,27 +263,162 @@ export default function LotsTable({
         </table>
       </div>
 
+      {/* Mobile/Tablet Card View */}
+      <div className="lg:hidden divide-y divide-gray-200">
+        {lots.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-base font-medium">No lots found</p>
+            <p className="text-sm mt-1">
+              Try adjusting your filters or upload new data
+            </p>
+          </div>
+        ) : (
+          lots.map((lot) => (
+            <div
+              key={lot.id}
+              className={`p-4 hover:bg-gray-50 transition ${
+                selectedLots.includes(lot.id) ? "bg-blue-50" : ""
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start gap-3 flex-1">
+                  <Checkbox
+                    checked={selectedLots.includes(lot.id)}
+                    onCheckedChange={() => handleSelectLot(lot.id)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">
+                          {lot.lot_number}
+                        </h3>
+                        <p className="text-sm text-gray-500 truncate mt-0.5">
+                          {lot.file_name}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => handleDownload(lot.id)}
+                      disabled={downloading === lot.id}
+                      className="gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(lot.id)}
+                      className="gap-2 text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm ml-8">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Hash className="h-4 w-4 flex shrink-0" />
+                  <span className="truncate">
+                    <span className="font-medium text-gray-900">
+                      {formatNumber(lot.record_count)}
+                    </span>{" "}
+                    records
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar className="h-4 w-4 flex shrink-0" />
+                  <span className="truncate text-xs">
+                    {formatDate(lot.uploaded_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600 col-span-2">
+                  <User className="h-4 w-4 flex shrink-0" />
+                  <Badge
+                    variant="secondary"
+                    className="bg-purple-100 text-purple-700 text-xs"
+                  >
+                    {lot.uploaded_by_token || "Unknown"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-700">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              Next
-            </button>
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-sm text-gray-700 order-2 sm:order-1">
+              Page <span className="font-medium">{currentPage}</span> of{" "}
+              <span className="font-medium">{totalPages}</span>
+            </div>
+
+            <div className="flex items-center gap-2 order-1 sm:order-2 w-full sm:w-auto">
+              <Button
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                variant="outline"
+                size="sm"
+                className="gap-2 flex-1 sm:flex-none"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Previous</span>
+              </Button>
+
+              {/* Page numbers - Hidden on mobile */}
+              <div className="hidden md:flex gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      onClick={() => onPageChange(pageNum)}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      className="w-10"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                variant="outline"
+                size="sm"
+                className="gap-2 flex-1 sm:flex-none"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       )}
