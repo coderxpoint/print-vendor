@@ -3,11 +3,18 @@ from sqlalchemy.orm import Session
 from typing import List
 import secrets
 from app.models.database import get_db
-from app.models.models import AdminUser, APIToken
+from app.models.models import APIToken
 from app.models.schemas import APITokenCreate, APITokenResponse
-from app.api.deps import get_current_admin
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/tokens", tags=["API Tokens"])
+
+# Validation schema for public token generation
+class PublicTokenCreate(BaseModel):
+    name: str
+    validation_string: str
+
+REQUIRED_VALIDATION_STRING = "lotdata"
 
 def generate_token() -> str:
     """Generate a secure random token"""
@@ -15,18 +22,24 @@ def generate_token() -> str:
 
 @router.post("/generate", response_model=APITokenResponse)
 def create_api_token(
-    token_data: APITokenCreate,
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin)
+    token_data: PublicTokenCreate,
+    db: Session = Depends(get_db)
 ):
     """
     Generate a new API token for merchant access
-    Requires admin authentication
+    PUBLIC ENDPOINT - Requires validation string
     """
+    # Validate the secret string
+    if token_data.validation_string != REQUIRED_VALIDATION_STRING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Invalid validation string. Required: '{REQUIRED_VALIDATION_STRING}'"
+        )
+    
     # Generate unique token
     token = generate_token()
     
-    # Create token record using constructor
+    # Create token record
     api_token = APIToken(
         token=token,
         name=token_data.name,
@@ -40,12 +53,11 @@ def create_api_token(
 
 @router.get("", response_model=List[APITokenResponse])
 def list_api_tokens(
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin)
+    db: Session = Depends(get_db)
 ):
     """
     Get all API tokens
-    Requires admin authentication
+    PUBLIC ENDPOINT - No authentication required
     """
     tokens = db.query(APIToken).order_by(APIToken.created_at.desc()).all()
     return tokens
@@ -53,13 +65,20 @@ def list_api_tokens(
 @router.delete("/{token_id}")
 def delete_api_token(
     token_id: int,
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin)
+    validation_string: str,
+    db: Session = Depends(get_db)
 ):
     """
     Delete an API token
-    Requires admin authentication
+    PUBLIC ENDPOINT - Requires validation string as query parameter
     """
+    # Validate the secret string
+    if validation_string != REQUIRED_VALIDATION_STRING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Invalid validation string"
+        )
+    
     token = db.query(APIToken).filter(APIToken.id == token_id).first()
     
     if not token:
@@ -76,13 +95,20 @@ def delete_api_token(
 @router.patch("/{token_id}/toggle")
 def toggle_api_token(
     token_id: int,
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin)
+    validation_string: str,
+    db: Session = Depends(get_db)
 ):
     """
     Toggle API token active status
-    Requires admin authentication
+    PUBLIC ENDPOINT - Requires validation string as query parameter
     """
+    # Validate the secret string
+    if validation_string != REQUIRED_VALIDATION_STRING:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Invalid validation string"
+        )
+    
     token = db.query(APIToken).filter(APIToken.id == token_id).first()
     
     if not token:

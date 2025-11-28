@@ -36,7 +36,7 @@ interface Token {
   usage_count: number;
 }
 
-export default function SettingsPage() {
+export default function PublicSettingsPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTokenName, setNewTokenName] = useState("");
@@ -48,29 +48,10 @@ export default function SettingsPage() {
 
   const REQUIRED_VALIDATION_STRING = "lotdata";
 
-  // Get JWT token from localStorage
-  const getAuthToken = () => {
-    return localStorage.getItem("token");
-  };
-
-  // Fetch all tokens
+  // Fetch all tokens - NO AUTH REQUIRED
   const fetchTokens = async () => {
     try {
-      const authToken = getAuthToken();
-      if (!authToken) {
-        toast({
-          title: "Error",
-          description: "Please login first",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const response = await fetch("http://localhost:8000/api/tokens", {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
+      const response = await fetch("http://localhost:8000/api/tokens");
 
       if (response.ok) {
         const data = await response.json();
@@ -93,7 +74,7 @@ export default function SettingsPage() {
   const isValidationCorrect = validationString === REQUIRED_VALIDATION_STRING;
   const canGenerateToken = newTokenName.trim() && isValidationCorrect;
 
-  // Create new token
+  // Create new token - NO AUTH REQUIRED
   const createToken = async () => {
     if (!newTokenName.trim()) {
       toast({
@@ -116,16 +97,17 @@ export default function SettingsPage() {
 
     setCreatingToken(true);
     try {
-      const authToken = getAuthToken();
       const response = await fetch(
         "http://localhost:8000/api/tokens/generate",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${authToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ name: newTokenName }),
+          body: JSON.stringify({
+            name: newTokenName,
+            validation_string: validationString,
+          }),
         }
       );
 
@@ -147,12 +129,13 @@ export default function SettingsPage() {
         // Show the new token by default
         setVisibleTokens(new Set([newToken.id]));
       } else {
-        throw new Error("Failed to create token");
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to create token");
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create token",
+        description: error.message || "Failed to create token",
         variant: "destructive",
       });
     } finally {
@@ -160,21 +143,32 @@ export default function SettingsPage() {
     }
   };
 
-  // Delete token
+  // Delete token - NO AUTH, BUT REQUIRES VALIDATION
   const deleteToken = async (tokenId: number) => {
+    const userValidation = prompt(
+      `To delete this token, enter the validation string: "${REQUIRED_VALIDATION_STRING}"`
+    );
+
+    if (userValidation !== REQUIRED_VALIDATION_STRING) {
+      toast({
+        title: "Validation Failed",
+        description: "Incorrect validation string",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this token?")) {
       return;
     }
 
     try {
-      const authToken = getAuthToken();
       const response = await fetch(
-        `http://localhost:8000/api/tokens/${tokenId}`,
+        `http://localhost:8000/api/tokens/${tokenId}?validation_string=${encodeURIComponent(
+          REQUIRED_VALIDATION_STRING
+        )}`,
         {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
         }
       );
 
@@ -196,17 +190,28 @@ export default function SettingsPage() {
     }
   };
 
-  // Toggle token active status
+  // Toggle token active status - NO AUTH, BUT REQUIRES VALIDATION
   const toggleToken = async (tokenId: number) => {
+    const userValidation = prompt(
+      `To toggle this token, enter the validation string: "${REQUIRED_VALIDATION_STRING}"`
+    );
+
+    if (userValidation !== REQUIRED_VALIDATION_STRING) {
+      toast({
+        title: "Validation Failed",
+        description: "Incorrect validation string",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const authToken = getAuthToken();
       const response = await fetch(
-        `http://localhost:8000/api/tokens/${tokenId}/toggle`,
+        `http://localhost:8000/api/tokens/${tokenId}/toggle?validation_string=${encodeURIComponent(
+          REQUIRED_VALIDATION_STRING
+        )}`,
         {
           method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
         }
       );
 
@@ -287,11 +292,24 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Token Management</h1>
         <p className="text-gray-600 mt-2">
-          Manage API tokens and application settings
+          Generate and manage API tokens (No login required)
         </p>
       </div>
+
+      {/* Security Notice */}
+      <Alert className="mb-6 border-blue-200 bg-blue-50">
+        <Shield className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Public Access:</strong> This page is publicly accessible. All
+          actions require the validation string{" "}
+          <code className="px-2 py-0.5 bg-blue-100 rounded font-mono text-sm">
+            {REQUIRED_VALIDATION_STRING}
+          </code>{" "}
+          for security.
+        </AlertDescription>
+      </Alert>
 
       {/* Create New Token */}
       <Card className="mb-8 border-blue-200">
@@ -305,19 +323,6 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {/* Security Alert */}
-          <Alert className="mb-6 border-amber-200 bg-amber-50">
-            <Shield className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="text-amber-800">
-              <strong>Security Check Required:</strong> To generate a new API
-              token, you must enter the validation string{" "}
-              <code className="px-2 py-0.5 bg-amber-100 rounded font-mono text-sm">
-                {REQUIRED_VALIDATION_STRING}
-              </code>{" "}
-              below.
-            </AlertDescription>
-          </Alert>
-
           <div className="space-y-4">
             {/* Token Name Input */}
             <div>
@@ -343,7 +348,7 @@ export default function SettingsPage() {
               </Label>
               <Input
                 id="validationString"
-                placeholder={`Enter Secret Code to enable token generation`}
+                placeholder="Enter secret code to enable token generation"
                 value={validationString}
                 onChange={(e) => {
                   setValidationString(e.target.value);
@@ -371,7 +376,7 @@ export default function SettingsPage() {
                     ) : (
                       <div className="flex items-center gap-1 text-red-600 text-sm">
                         <XCircle className="h-4 w-4" />
-                        <span>Incorrect validation string.</span>
+                        <span>Incorrect validation string</span>
                       </div>
                     )}
                   </>
@@ -403,25 +408,6 @@ export default function SettingsPage() {
                 )}
               </Button>
             </div>
-
-            {!canGenerateToken && (
-              <Alert className="border-gray-200">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {!newTokenName.trim() && !validationString && (
-                    <>
-                      Please fill in both required fields to generate a token.
-                    </>
-                  )}
-                  {!newTokenName.trim() && validationString && (
-                    <>Please enter a token name.</>
-                  )}
-                  {newTokenName.trim() && !isValidationCorrect && (
-                    <>Please enter the correct validation string to proceed.</>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -430,9 +416,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>API Tokens ({tokens.length})</CardTitle>
-          <CardDescription>
-            Manage existing API tokens for merchant access
-          </CardDescription>
+          <CardDescription>View and manage existing API tokens</CardDescription>
         </CardHeader>
         <CardContent>
           {tokens.length === 0 ? (
@@ -563,42 +547,26 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>How to Use API Tokens</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-semibold mb-2">1. Generate a Token</h4>
-            <p className="text-sm text-gray-600">
-              Create a new token above by entering a descriptive name and the
-              validation string "{REQUIRED_VALIDATION_STRING}". Click "Generate
-              Token" and the token will be automatically copied to your
-              clipboard.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">2. Share with Merchant</h4>
-            <p className="text-sm text-gray-600">
-              Securely share the generated token with the merchant who needs to
-              upload data.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">3. API Endpoint</h4>
-            <p className="text-sm text-gray-600 mb-2">
-              Merchants should use this endpoint to upload data:
-            </p>
-            <code className="block bg-gray-100 p-3 rounded text-sm font-mono">
-              POST http://localhost:8000/api/upload?token=YOUR_TOKEN_HERE
-            </code>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">4. Manage Tokens</h4>
-            <p className="text-sm text-gray-600">
-              You can disable tokens temporarily or delete them permanently.
-              Track usage statistics to monitor merchant activity.
-            </p>
-          </div>
+        <CardContent className="space-y-4 text-sm text-gray-600">
+          <p>
+            <strong>1. Generate a Token:</strong> Enter a name and the
+            validation string "{REQUIRED_VALIDATION_STRING}", then click
+            "Generate Token".
+          </p>
+          <p>
+            <strong>2. Share with Merchant:</strong> Securely share the token
+            with the merchant.
+          </p>
+          <p>
+            <strong>3. API Endpoint:</strong>
+          </p>
+          <code className="block bg-gray-100 p-3 rounded font-mono">
+            POST http://localhost:8000/api/upload?token=YOUR_TOKEN_HERE
+          </code>
+          <p>
+            <strong>4. Manage Tokens:</strong> Disable, enable, or delete tokens
+            as needed. All actions require the validation string.
+          </p>
         </CardContent>
       </Card>
     </div>

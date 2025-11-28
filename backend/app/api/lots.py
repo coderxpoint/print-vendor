@@ -68,23 +68,35 @@ def download_lot(
     Download CSV file for a specific lot
     Requires admin authentication
     """
+    print(f"[DEBUG] Download requested for lot_id: {lot_id}")
+    
     lot = db.query(Lot).filter(Lot.id == lot_id).first()
     
     if not lot:
+        print(f"[DEBUG] Lot {lot_id} not found in database")
+        # List available lots for debugging
+        all_lots = db.query(Lot.id, Lot.lot_number).all()
+        available_ids = [str(l.id) for l in all_lots]
+        print(f"[DEBUG] Available lot IDs: {', '.join(available_ids) if available_ids else 'None'}")
+        
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Lot not found"
+            detail=f"Lot with ID {lot_id} not found. Available lot IDs: {', '.join(available_ids) if available_ids else 'none - please upload data first'}"
         )
+    
+    print(f"[DEBUG] Lot found: {lot.lot_number}, file_path: {lot.file_path}")
     
     file_path = str(lot.file_path)
     if not os.path.exists(file_path):
+        print(f"[DEBUG] File not found at path: {file_path}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found on server"
+            detail=f"File not found on server: {lot.file_name}"
         )
     
+    print(f"[DEBUG] Sending file: {file_path}")
     return FileResponse(
-        path=str(lot.file_path),
+        path=file_path,
         filename=str(lot.file_name),
         media_type='text/csv'
     )
@@ -163,15 +175,18 @@ def delete_lot(
         )
     
     # Delete file if exists
-    if os.path.exists(str(lot.file_path)):
+    file_path = str(lot.file_path)
+    if os.path.exists(file_path):
         try:
-            os.remove(str(lot.file_path))
+            os.remove(file_path)
+            print(f"[DEBUG] Deleted file: {file_path}")
         except Exception as e:
             # Log error but continue with database deletion
-            print(f"Error deleting file: {e}")
+            print(f"[ERROR] Error deleting file: {e}")
     
     # Delete from database
     db.delete(lot)
     db.commit()
     
+    print(f"[DEBUG] Deleted lot {lot_id} from database")
     return {"message": "Lot deleted successfully"}
